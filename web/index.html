@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📺%3C/text%3E%3C/svg%3E">
+  <title>提词器</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="library-view" class="library-view" aria-label="稿件库">
+    <div class="library-inner">
+      <header class="lib-head">
+        <div>
+          <p class="eyebrow">TELEPROMPTER</p>
+          <h1>稿件库</h1>
+          <p class="lib-sub">支持 md / docx / txt，也可以直接粘贴文本。</p>
+        </div>
+        <div class="lib-actions">
+          <button id="upload-btn" class="primary" type="button">上传文件</button>
+          <button id="paste-btn" class="ghost" type="button">粘贴文本</button>
+          <input id="file-input" class="file-input" type="file" accept=".md,.markdown,.txt,.docx">
+        </div>
+      </header>
+
+      <div id="drop-zone" class="drop-zone">
+        拖拽文件到这里，或点「上传文件」
+      </div>
+
+      <p id="lib-status" class="lib-status" role="status"></p>
+      <ul id="script-list" class="script-list"></ul>
+      <div id="lib-empty" class="lib-empty" hidden>
+        <p>还没有稿件。</p>
+        <p>上传一份 md / docx，或先粘贴一段文字。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="player-view" class="player-view" hidden>
+    <main id="stage" class="stage">
+      <div id="content" class="content" aria-live="polite"></div>
+      <div class="focus-mask" aria-hidden="true"></div>
+      <div class="focus-line" aria-hidden="true"></div>
+
+      <header class="hud" aria-hidden="true">
+        <span id="hud-title" class="hud-title">提词器</span>
+        <span id="hud-progress" class="hud-progress">0%</span>
+      </header>
+
+      <section id="start" class="overlay" aria-label="开始播放">
+        <p class="eyebrow">提词器</p>
+        <h1 id="start-title">提词器</h1>
+        <p class="overlay-hint">点击开始，3-2-1 后按「字/分钟」自动滚动</p>
+        <div class="overlay-actions">
+          <button id="start-btn" class="primary" type="button">开始播放</button>
+          <button id="start-settings" class="ghost" type="button">设置</button>
+        </div>
+        <p class="overlay-foot">空格暂停 · 左右点击调速 · 双指点按出控制条</p>
+      </section>
+
+      <div id="countdown" class="countdown" hidden aria-live="assertive">3</div>
+
+      <section id="end" class="overlay" hidden aria-label="播放结束">
+        <p class="eyebrow">已到末尾</p>
+        <h1>读完啦</h1>
+        <div class="overlay-actions">
+          <button id="replay-btn" class="primary" type="button">重播</button>
+          <button id="end-back" class="ghost" type="button">返回稿件库</button>
+        </div>
+      </section>
+
+      <section id="controls" class="controls" aria-label="播放设置">
+        <div class="controls-head">
+          <strong>播放设置</strong>
+          <button id="controls-close" class="ghost" type="button">关闭</button>
+        </div>
+
+        <label class="row">
+          <span>速度 <output id="wpm-value">220</output> 字/分</span>
+          <input id="wpm" type="range" min="60" max="600" step="10" value="220">
+        </label>
+
+        <label class="row">
+          <span>字号 <output id="font-value">48</output> px</span>
+          <input id="font" type="range" min="32" max="96" step="2" value="48">
+        </label>
+
+        <label class="row">
+          <span>行距 <output id="line-value">1.6</output></span>
+          <input id="line" type="range" min="1.3" max="2.0" step="0.1" value="1.6">
+        </label>
+
+        <div class="row">
+          <span>配色</span>
+          <div class="segmented" role="group" aria-label="配色">
+            <button type="button" data-theme-value="dark" class="active">暗底</button>
+            <button type="button" data-theme-value="light">亮底</button>
+            <button type="button" data-theme-value="amber">琥珀</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <span>翻转</span>
+          <div class="segmented" role="group" aria-label="翻转">
+            <button id="flip-x" type="button">左右镜像</button>
+            <button id="flip-y" type="button">上下翻转</button>
+          </div>
+        </div>
+
+        <label class="row">
+          <span>进度 <output id="progress-value">0%</output></span>
+          <input id="progress" type="range" min="0" max="1000" step="1" value="0">
+        </label>
+
+        <div class="controls-actions">
+          <button id="fullscreen-btn" class="ghost" type="button">全屏</button>
+          <button id="restart-btn" class="ghost" type="button">从头开始</button>
+          <button id="back-btn" class="ghost" type="button">返回稿件库</button>
+        </div>
+      </section>
+
+      <div id="status" class="status" role="status">加载中…</div>
+    </main>
+  </section>
+
+  <div id="paste-modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="paste-heading">
+      <div class="modal-head">
+        <h2 id="paste-heading">粘贴文本</h2>
+        <button id="paste-cancel" class="ghost" type="button">取消</button>
+      </div>
+      <label class="field">
+        <span>标题（可选）</span>
+        <input id="paste-title" type="text" maxlength="80" placeholder="不填则用正文首行">
+      </label>
+      <label class="field">
+        <span>正文</span>
+        <textarea id="paste-text" rows="12" placeholder="一行一段，空行会忽略"></textarea>
+      </label>
+      <p id="paste-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <button id="paste-save" class="primary" type="button">保存并打开</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rename-modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rename-heading">
+      <div class="modal-head">
+        <h2 id="rename-heading">重命名</h2>
+        <button id="rename-cancel" class="ghost" type="button">取消</button>
+      </div>
+      <label class="field">
+        <span>标题</span>
+        <input id="rename-input" type="text" maxlength="80">
+      </label>
+      <p id="rename-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <button id="rename-save" class="primary" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
