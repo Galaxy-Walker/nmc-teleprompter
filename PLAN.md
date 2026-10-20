@@ -248,8 +248,8 @@ Tier 2 里的**账号系统在内网单机场景纯属负担**，不建议。
 - 内层 `.content` 负责滚动：`transform: translate3d(0, -y, 0)`。
 - **两层必须分开**。`translate` 和 `scale` 放在同一个元素上时，顺序会改变位移方向；分开后逻辑简单，镜像和滚动互不干扰。
 - 焦点线在 `.stage` 内，距逻辑顶部 30%，跟着整屏一起翻转。
-- `.content` 的逻辑顶部也定在 30%（焦点线位置），底部留 70vh 空白。于是 `y = 0` 时首行正好在焦点线上；`y` 增大时文字向上走，下一行经过焦点线。
-- `y` 的最大值取最后一段的底部（`last.offsetTop + last.offsetHeight`），到点停住；底部留白保证末行能滚到焦点线附近，不会卡在屏幕下沿。
+- `.content` 的逻辑顶部 = 焦点线 - 半个行高（CSS 变量 `--focus-offset`），底部留 70vh 空白。于是 `y = 0` 时首行**中心**在焦点线上；`y` 增大时文字向上走，下一行经过焦点线。
+- `y` 的最大值 = 最后一段底部 - 一个行高（`maxY`），让末行中心落在焦点线；底部留白保证能滚到这个位置。
 
 ### 5.2 测量
 
@@ -260,6 +260,7 @@ Tier 2 里的**账号系统在内网单机场景纯属负担**，不建议。
    - `units[i]`：该段阅读单位数（来自 API）
    - `cum[i]`：前 i 段的累计单位数，`cum[n] = total`
    - `tops[i]`：该段顶部相对内容层的像素位置；`tops[0] = 第一段 offsetTop`（没有 top padding 时为 0），`tops[n] = 最后一段底部`
+   - `maxY = max(0, tops[n] - 行高)`：末行中心对齐焦点线；`charsToY`/`yToChars` 在最后一段用 `maxY` 作为终点
 3. 测量只读一次布局，不要边读边改样式（避免 layout thrash）。
 4. 字号/行距/列宽/横竖屏/全屏变化 → 重新测量；**用当前的 `charsRead` 反算 `y`，不要跳回开头**。
 5. 翻转 `flipX/flipY` 不改变布局尺寸，**不需要重测**；只改 `.stage` 的 transform。
@@ -393,6 +394,7 @@ teleprompter/
 ├── PLAN.md                 # 本文件
 ├── README.md               # 部署与使用说明（最后写）
 ├── .gitattributes          # *.sh eol=lf，防止 Windows 把 start.sh 写成 CRLF
+├── .python-version         # uv pin 3.12，保证本机和容器都用 3.12
 ├── pyproject.toml          # uv 管理：fastapi / uvicorn / python-multipart；requires-python = ">=3.12,<3.13"
 ├── uv.lock
 ├── requirements.txt        # uv export 生成，部署用（固定版本）
@@ -415,9 +417,10 @@ teleprompter/
 │   └── wake.js             # 静音 mp4 循环（v1 不做 Wake Lock）
 ├── tests/
 │   ├── probe_docx_textbox.py
-│   ├── test_parse.py       # docx 文本框/fallback、md 清洗、编码、字数
-│   ├── test_library.py     # CRUD、重名、路径穿越
-│   └── test_api.py         # 上传/粘贴/列表/详情/重命名/删除
+│   ├── test_health.py      # health/静态页/只读 scripts 接口
+│   ├── test_parse.py       # md/docx/txt 解析、编码、字数
+│   ├── test_library.py     # 示例种子、CRUD、重名、路径穿越
+│   └── test_api.py         # 上传/粘贴/重命名/删除
 ├── samples/                # 测试稿：长文、中英混排、带文本框的 docx
 └── data/                   # 运行时稿件目录（.gitignore 忽略）
 ```
@@ -481,6 +484,8 @@ DELETE /api/scripts/{id}     → 204
 | **P3** | 防息屏（静音 mp4，**需 iPad 实机验证**）、全屏降级、`visibilitychange` 处理 | 播放 5 分钟不息屏；切后台回来位置不乱；暂停 5 分钟也不息屏 |
 | **P4** | compose（路径 A）→ 绿联 Docker「项目」部署，写 README | 先用 hello-world 验证项目页；再部署正式服务；NAS 重启后容器自启，稿件还在 |
 | **P5** | 打磨：设置面板收纳、误触防护、横竖屏切换重测量、万字稿性能 | 只在实测有问题时做；不做提前优化 |
+
+> 当前进度（2026-10-21）：P0 已通过平板连通性验证；P1 已实现并通过无头 Edge 的滚动/暂停/镜像/触控/改字号检查；P2 已实现 md/docx/txt 上传、粘贴、重命名、删除，**31 个后端测试 + 无头 Edge 全流程通过**，待两台平板实机传真实 docx 验收。
 
 ---
 
@@ -665,6 +670,10 @@ CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8
 ## 12. 开发环境（本机）
 
 ```powershell
+# 0. 装并锁定 Python 3.12（uv 管理，不全局安装；会生成 .python-version）
+uv python install 3.12
+uv python pin 3.12
+
 # 1. 初始化（已有 PLAN.md 也能跑；--bare 只生成 pyproject.toml）
 uv init --bare --python 3.12
 
@@ -675,7 +684,7 @@ uv init --bare --python 3.12
 uv add fastapi uvicorn python-multipart
 
 # 4. 开发依赖
-uv add --dev pytest httpx watchfiles
+uv add --dev pytest httpx2 watchfiles
 
 # 5. 生成部署用固定版本（提交到仓库）
 uv export --no-dev --no-emit-project --no-hashes --no-header --no-annotate -o requirements.txt
@@ -688,6 +697,8 @@ uv run pytest
 ```
 
 - `uvicorn` 不带 `[standard]`：uvicorn 本体只需要 h11 + click，少装 uvloop/httptools/websockets 等；开发时的 `--reload` 由 dev 依赖 `watchfiles` 提供。
+- `TestClient` 用 `httpx2`：Starlette 1.9 起旧 `httpx` 会触发弃用警告；它只用于测试，不进部署 `requirements.txt`。
+- `pyproject.toml` 里配了 `[tool.pytest.ini_options]` 的 `testpaths` / `pythonpath`；`uv run pytest` 能直接 `import app`，不需要为了 `sys.path` 额外加 `conftest.py`（`tests/conftest.py` 只放 docx fixture）。
 - `--host 0.0.0.0` 让平板能直接用电脑 IP 访问，**P0 阶段先用这个验证校园网连通性**，通了再谈容器化。
 - Windows 首次运行会弹防火墙，勾选「专用网络」；否则平板访问不到。
 - 本机 `DATA_DIR` 默认 `./data`（已在 `.gitignore` 里）；容器里是 `/data`。
