@@ -42,6 +42,7 @@ export async function createPlayer({ script, settings }) {
   const backBtn = byId("back-btn");
   const statusEl = byId("status");
   const wakeNote = byId("wake-note");
+  const wakeStatus = byId("wake-status");
   const fullscreenHint = byId("fullscreen-hint");
   const themeButtons = Array.from(document.querySelectorAll("[data-theme-value]"));
 
@@ -112,6 +113,7 @@ export async function createPlayer({ script, settings }) {
   countdownEl.hidden = true;
   controls.classList.remove("open");
   wakeNote.hidden = true;
+  wakeStatus.textContent = "防息屏：未启动";
 
   function applyVisuals() {
     document.documentElement.style.setProperty("--font-size", `${fontSize}px`);
@@ -254,6 +256,9 @@ export async function createPlayer({ script, settings }) {
   function startWake() {
     wake.start().then((ok) => {
       wakeNote.hidden = ok;
+      wakeStatus.textContent = ok
+        ? "防息屏：视频播放中"
+        : "防息屏：启动失败，请调长自动锁定";
     });
   }
 
@@ -680,6 +685,7 @@ export async function createPlayer({ script, settings }) {
       pause();
       cancelCountdown();
       wake.stop();
+      wakeStatus.textContent = "防息屏：已暂停（切后台）";
     }
   });
 
