@@ -1,0 +1,15 @@
+# 运行时数据：稿件库与容器内依赖，均不入库
+/data/
+/venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# 临时文件
+.tmp/
+*.log
+*.docx
+!samples/*.docx

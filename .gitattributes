@@ -1,0 +1,4 @@
+* text=auto
+
+# 容器里用 bash 执行，必须是 LF；否则会报 $'\r': command not found
+*.sh text eol=lf
