@@ -48,6 +48,10 @@
         <span id="hud-progress" class="hud-progress">0%</span>
       </header>
 
+      <p id="wake-note" class="wake-note" role="status" hidden>
+        防息屏未生效：请把系统自动锁定时间调长。
+      </p>
+
       <section id="start" class="overlay" aria-label="开始播放">
         <p class="eyebrow">提词器</p>
         <h1 id="start-title">提词器</h1>
@@ -75,6 +79,10 @@
           <strong>播放设置</strong>
           <button id="controls-close" class="ghost" type="button">关闭</button>
         </div>
+
+        <p id="fullscreen-hint" class="controls-hint" hidden>
+          iPad 不支持网页全屏；可点分享 → 添加到主屏幕。
+        </p>
 
         <label class="row">
           <span>速度 <output id="wpm-value">220</output> 字/分</span>

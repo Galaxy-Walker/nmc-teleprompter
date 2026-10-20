@@ -1,4 +1,5 @@
 import { saveSettings } from "./settings.js";
+import { createWakeLock } from "./wake.js";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -40,6 +41,8 @@ export async function createPlayer({ script, settings }) {
   const restartBtn = byId("restart-btn");
   const backBtn = byId("back-btn");
   const statusEl = byId("status");
+  const wakeNote = byId("wake-note");
+  const fullscreenHint = byId("fullscreen-hint");
   const themeButtons = Array.from(document.querySelectorAll("[data-theme-value]"));
 
   const cleanups = [];
@@ -57,6 +60,7 @@ export async function createPlayer({ script, settings }) {
     throw new Error("稿件为空");
   }
 
+  const wake = createWakeLock();
   const cum = [0];
   for (const value of units) {
     cum.push(cum[cum.length - 1] + value);
@@ -107,6 +111,7 @@ export async function createPlayer({ script, settings }) {
   endOverlay.hidden = true;
   countdownEl.hidden = true;
   controls.classList.remove("open");
+  wakeNote.hidden = true;
 
   function applyVisuals() {
     document.documentElement.style.setProperty("--font-size", `${fontSize}px`);
@@ -246,8 +251,15 @@ export async function createPlayer({ script, settings }) {
     rafId = requestAnimationFrame(tick);
   }
 
+  function startWake() {
+    wake.start().then((ok) => {
+      wakeNote.hidden = ok;
+    });
+  }
+
   function play() {
     if (!ready || playing || counting) return;
+    startWake();
     if (charsRead >= total) setChars(0);
     endOverlay.hidden = true;
     playing = true;
@@ -271,6 +283,7 @@ export async function createPlayer({ script, settings }) {
 
   function begin() {
     if (!ready || counting) return;
+    startWake();
     closeControls();
     if (charsRead >= total) setChars(0);
     endOverlay.hidden = true;
@@ -559,7 +572,10 @@ export async function createPlayer({ script, settings }) {
   const canFullscreen =
     Boolean(document.documentElement.requestFullscreen) &&
     !/iPad|iPhone|iPod/.test(navigator.userAgent);
-  if (!canFullscreen) fullscreenBtn.hidden = true;
+  if (!canFullscreen) {
+    fullscreenBtn.hidden = true;
+    fullscreenHint.hidden = false;
+  }
 
   on(fullscreenBtn, "click", async () => {
     try {
@@ -663,6 +679,7 @@ export async function createPlayer({ script, settings }) {
     if (document.hidden) {
       pause();
       cancelCountdown();
+      wake.stop();
     }
   });
 
@@ -676,6 +693,8 @@ export async function createPlayer({ script, settings }) {
     clearTimeout(speedFlashTimer);
     cancelAnimationFrame(rafId);
     cancelAnimationFrame(remeasureRaf);
+    wake.destroy();
+    wakeNote.hidden = true;
     content.replaceChildren();
   }
 
