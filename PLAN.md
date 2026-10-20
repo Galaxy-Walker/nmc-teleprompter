@@ -8,14 +8,14 @@
 
 ## 0. 执行摘要（先看这段）
 
-一句话：**单容器 FastAPI + 无构建原生前端；稿件存 NAS 文件系统；绿联 Docker「项目」粘贴 compose，官方 Python 镜像 + 固定版本 `requirements.txt`；播放用「字→像素」映射 + `translate3d`；防息屏用静音 mp4 循环。**
+一句话：**单容器 FastAPI + 无构建原生前端；稿件存 NAS 文件系统；绿联 Docker「项目」粘贴 compose，官方 Python 镜像 + 固定版本 `requirements.txt`；播放用「字→像素」映射 + `translate3d`；防息屏用带静音音轨的 WebM/MP4 循环。**
 
 五条实现铁律（防止方案膨胀）：
 
 1. **一个容器、一个端口、一个数据目录**。不引入数据库、nginx、Node、前端框架。
 2. **开发用 uv，部署用 `requirements.txt`**。版本由 `uv export` 从 `uv.lock` 固定；容器里不装 uv。
 3. **播放核心只做三件事**：全量测量、字→像素映射、`translate3d`。不做懒测量/虚拟列表；实测慢再优化。
-4. **防息屏只做静音 mp4 循环**。http 内网下 Wake Lock 必然不可用，v1 不写这条死代码。
+4. **防息屏只做带静音音轨的 WebM/MP4 循环**。http 内网下 Wake Lock 必然不可用，v1 不写这条死代码。
 5. **部署只维护路径 A**（UGOS「项目」+ 官方镜像）。路径 B/C 只作逃生通道，不在主流程里。
 
 ---
@@ -45,7 +45,7 @@
 - 水平镜像 + 上下翻转
 - 字号/行距/配色调节
 - 焦点行指示线
-- 防息屏：静音 mp4 循环
+- 防息屏：带静音音轨的 WebM/MP4 循环
 - 开播前 3-2-1 倒计时
 - 触控分区操作
 - 键盘快捷键（接电脑时）
@@ -311,7 +311,7 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 
 ### 6.2 开播与倒计时
 
-- 进入播放页先显示「开始」大按钮；点击后播放静音视频（满足用户手势），再走 3-2-1 倒计时。
+- 进入播放页先显示「开始」大按钮；点击后播放带静音音轨的常驻视频（满足用户手势），再走 3-2-1 倒计时。
 - 倒计时期间不响应触控分区；点任意处可取消。
 - 倒计时结束才开始累计 `charsRead`，避免「还没准备好字就跑了」。
 
@@ -358,7 +358,7 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 
 ### 6.7 切后台/来电
 
-- `visibilitychange` 到 hidden：暂停自动滚动，停掉静音视频，记住 `charsRead`
+- `visibilitychange` 到 hidden：暂停自动滚动，停掉常驻视频，记住 `charsRead`
 - 回到前台：不自动继续（浏览器可能限制播放），显示「已暂停，点继续」；用户点击后再启动视频和滚动
 - 这样既不会计时错乱，也不会在用户没准备时突然开跑
 
@@ -368,8 +368,8 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 
 | # | 坑 | 影响 | 对策 |
 | --- | --- | --- | --- |
-| 1 | `http://192.168.x.x` **不是 secure context**（MDN：只有 `https://`、`http://localhost`/`127.0.0.1`/`*.localhost`、`file://` 算 potentially trustworthy，私网 IP 不算） | Wake Lock、Service Worker、剪贴板 API 全部不可用 | **v1 不写 Wake Lock/Service Worker**；防息屏只用静音 mp4 循环。将来上 HTTPS 再补 Wake Lock，约 15 行 |
-| 1b | 防息屏必须用**视频**而非音频 | `<audio>` 在 iOS 上不可靠 | `<video muted loop playsinline>` + base64 内联极小 mp4；由「开始」按钮的用户手势启动；**暂停时不要停视频**（暂停久了也会息屏），离开播放页/切后台才停 |
+| 1 | `http://192.168.x.x` **不是 secure context**（MDN：只有 `https://`、`http://localhost`/`127.0.0.1`/`*.localhost`、`file://` 算 potentially trustworthy，私网 IP 不算） | Wake Lock、Service Worker、剪贴板 API 全部不可用 | **v1 不写 Wake Lock/Service Worker**；防息屏只用带静音音轨的 WebM/MP4（**不 muted**）循环。将来上 HTTPS 再补 Wake Lock，约 15 行 |
+| 1b | 防息屏视频**不能 muted、也不能无音轨** | Android Chromium 把 muted/无音轨视频当作「无声媒体」，不阻止休眠；纯 `<audio>` 在 iOS 又不可靠 | `<video playsinline loop>` + 两路内联媒体：WebM(VP8+Vorbis) / MP4(H.264+AAC)；**音轨是静音的，但不要设 `muted`**；由「开始」按钮手势启动；暂停时继续播；离开/切后台才停。参考 NoSleep.js 的实际媒体 |
 | 1c | Wake Lock 在 iOS 上的版本差异 | 16.4–18.3 部分支持，主屏幕 standalone 下不工作（WebKit bug 254545）；18.4 起完整 | 本方案跑在 http 下，Wake Lock 必然不可用，所以不实现；记录在此，供以后上 HTTPS 参考 |
 | 2 | Fullscreen API：**iOS Safari 不支持对普通元素全屏**（web-features 标注 "Safari on iOS: Not supported"，Baseline 已被它阻塞 43 个月） | iPad 上无法真全屏，顶部留地址栏 | **安卓平板在 http 内网下可以真全屏**——只要求 transient user activation，**不要求 secure context**（Chrome Android 71+）。iPad 降级：引导「添加到主屏幕」+ 布局用 `dvh` 不依赖全屏；iPad 上隐藏全屏按钮 |
 | 3 | iOS `100vh` 包含地址栏高度 | 底部内容被遮 | `dvh/svh/lvh` 自 **iOS Safari 15.4** 起支持 → CSS 层叠兜底（先 `height:100vh` 再 `height:100dvh`），**不需要** JS 算 `--vh` |
@@ -414,7 +414,7 @@ teleprompter/
 │   ├── library.js          # 稿件库视图 + 上传/粘贴/重命名/删除
 │   ├── player.js           # 播放核心：测量 / 映射 / 滚动 / 触控
 │   ├── settings.js         # 设置项 + localStorage 持久化
-│   └── wake.js             # 静音 mp4 循环（v1 不做 Wake Lock）
+│   └── wake.js             # 带静音音轨的 WebM/MP4 循环（v1 不做 Wake Lock）
 ├── tests/
 │   ├── probe_docx_textbox.py
 │   ├── test_health.py      # health/静态页/只读 scripts 接口
@@ -481,11 +481,11 @@ DELETE /api/scripts/{id}     → 204
 | **P0** | uv 初始化 + FastAPI + 静态托管 + `/api/health` | 本机 `uv run` 起服务，**平板访问 `http://<PC_IP>:8000/api/health` 通**（先排掉校园网连通性/Windows 防火墙） |
 | **P1** | 播放核心：字体就绪后测量、字/分钟滚动、3-2-1 倒计时、触控分区、镜像/翻转、字号/行距/配色、焦点线 | 用 `samples/long.md` 在两台平板上滚得平滑、镜像正确、触控不错位；暂停/继续不跳位置 |
 | **P2** | 上传解析（docx/md/txt）+ 稿件库 CRUD + 测试 | 传一个带文本框的 docx，内容不缺、不重复；md/txt 编码正确；重名/路径穿越测试过 |
-| **P3** | 防息屏（静音 mp4，**需 iPad 实机验证**）、全屏降级、`visibilitychange` 处理 | 播放 5 分钟不息屏；切后台回来位置不乱；暂停 5 分钟也不息屏 |
+| **P3** | 防息屏（带静音音轨的 WebM/MP4，**需 iPad 实机验证**）、全屏降级、`visibilitychange` 处理 | 播放 5 分钟不息屏；切后台回来位置不乱；暂停 5 分钟也不息屏 |
 | **P4** | compose（路径 A）→ 绿联 Docker「项目」部署，写 README | 先用 hello-world 验证项目页；再部署正式服务；NAS 重启后容器自启，稿件还在 |
 | **P5** | 打磨：设置面板收纳、误触防护、横竖屏切换重测量、万字稿性能 | 只在实测有问题时做；不做提前优化 |
 
-> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 静音 mp4 防息屏、iPad 全屏降级、切后台暂停/停视频已实现并通过无头检查，**待 iPad 实机确认 5 分钟不息屏**。
+> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），并通过无头检查；**待 Android 复测 5 分钟不息屏 + iPad 实机确认**。
 
 ---
 
@@ -728,12 +728,13 @@ uv run pytest
 | 14 | XML 直读会把文本框读两遍 | ✅ 本机实测：Word 在 `mc:Choice` 和 `mc:Fallback` 各存一份，必须剪掉 Fallback | 同上 |
 | 15 | `uv export` 能生成部署用固定版本 | ✅ 本机验证（uv 0.12.23）：`uv export --no-dev --no-emit-project --no-hashes --no-header --no-annotate -o requirements.txt` 可用 | 本机命令 |
 | 16 | 绿联 SSH 是 922 端口 + 3 天验证码 | ⚠️ 来自社区帖，本次未复核成功（页面 521）。只影响路径 B，不影响主路径 A | [CSDN 社区帖](https://blog.csdn.net/qq_28550263/article/details/139510912) |
+| 17 | muted 的循环视频就能阻止手机息屏 | ❌ **Android Chromium 不认**：无音轨/muted 视频被判定为无声媒体，不阻止休眠；NoSleep.js 的回退媒体实际是 VP8+Vorbis / H.264+AAC，带静音音轨且不 muted | [Chromium 代码评审](https://codereview.chromium.org/478543003)、[NoSleep.js 源码](https://github.com/richtr/NoSleep.js/blob/master/src/index.js)、[NoSleep 媒体](https://github.com/richtr/NoSleep.js/blob/master/src/media.js) |
 
 > 说明：本机校园网 DNS 会把不少站点解析到 `198.18.x.x`（透明代理段），`web_fetch` 会以「非公网 IP」拒绝；上述页面是通过本机 HTTP 客户端 + 文本提取读到的。MDN 原文用 `monge.univ-eiffel.fr` 镜像交叉验证。网页内容会变，关键结论以本机实测/项目验收为准。
 
 **仍需实机验证（无法靠查资料确认）**：
 
-1. 静音 mp4 循环能否在**你那台 iPad 的具体 iOS 版本**上真正阻止息屏；不行就退化为「提示把系统自动锁定调长」。
+1. 带静音音轨的 WebM/MP4 循环能否在**你那台 iPad 的具体 iOS 版本**上真正阻止息屏；不行就退化为「提示把系统自动锁定调长」。
 2. UGOS「项目」页：相对路径、8300 端口、重启策略、日志是否都符合 §11.4 的描述。
 3. 项目页是否支持 `build:`（不影响主路径，但决定以后要不要换 Dockerfile）。
 4. 两台平板上的镜像/翻转/触控分区是否一致，尤其是 flipX+flipY 同时开。
@@ -755,10 +756,11 @@ uv run pytest
 6. **UGOS 路径写死**：`/volume/docker` 不是所有机器都一样；改为相对路径，绝对路径以项目页为准。
 7. **PUID/PGID 误解**：官方 Python 镜像不读这两个变量；明确 root 运行与文件属主后果。
 8. **进度记忆自相矛盾**：§1 说不做、§4/§5 又说存；统一为「不存播放进度，只存设备偏好」。
-9. **防息屏写 Wake Lock**：http 下必然不可用；v1 只做静音 mp4，删除死代码。
+9. **防息屏写 Wake Lock**：http 下必然不可用；v1 只做带静音音轨的 WebM/MP4，删除死代码。
 10. **API 双 Content-Type**：原草案同时支持 multipart 和 JSON；改为统一 FormData，少一个分支。
 11. **字数口径两套**：原计划前后端各算一遍；改为后端返回每段 `units`，前端只加总。
 12. **`uvicorn[standard]`**：部署用不到 uvloop/websockets；改为普通 `uvicorn`，开发用 `watchfiles` 提供 `--reload`。
+13. **防息屏媒体**：muted/无音轨视频在 Android Chromium 下不阻止休眠；改为带静音音轨的 WebM/MP4（**不 muted**），并在控制条显示「防息屏：视频播放中」。
 
 **简化的地方**：
 
