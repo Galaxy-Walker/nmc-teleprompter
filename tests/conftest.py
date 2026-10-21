@@ -1,7 +1,12 @@
 import io
+import os
 import zipfile
 
 import pytest
+
+# app.main resolves the access password at import time. Pin it for tests so
+# they never depend on a developer's environment or write data/.access-password.
+os.environ["TELEPROMPTER_PASSWORD"] = "test-pass"
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"

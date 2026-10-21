@@ -1,5 +1,16 @@
+function goToLogin() {
+  const next = encodeURIComponent(
+    location.pathname + location.search + location.hash
+  );
+  location.replace(`/login?next=${next}`);
+}
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, { cache: "no-store", ...options });
+  if (response.status === 401) {
+    goToLogin();
+    throw new Error("登录已过期，请重新输入密码");
+  }
   if (!response.ok) {
     let detail = "";
     try {
@@ -41,4 +52,8 @@ export function deleteScript(id) {
   return requestJson(`/api/scripts/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+export function logout() {
+  return requestJson("/api/logout", { method: "POST" });
 }

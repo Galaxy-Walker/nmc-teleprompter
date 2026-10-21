@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="robots" content="noindex">
+  <title>输入密码 · 提词器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📺%3C/text%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050505;
+      --fg: #f5f5f5;
+      --muted: #8a8a8a;
+      --line: #2a2a2a;
+      --panel: #0c0c0c;
+      --accent: #fbbf24;
+      --accent-contrast: #111111;
+      --danger: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 50% -10%, #201a08 0%, transparent 55%),
+        var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    .login-card {
+      width: min(420px, 100%);
+      padding: 30px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+    }
+
+    .badge {
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 54px;
+      margin-bottom: 20px;
+      border: 1px solid rgb(251 191 36 / 30%);
+      border-radius: 16px;
+      background: rgb(251 191 36 / 12%);
+      font-size: 26px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 7vw, 36px);
+      line-height: 1.15;
+    }
+
+    .sub {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .password-wrap {
+      position: relative;
+    }
+
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      height: 52px;
+      padding: 0 68px 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--bg);
+      color: var(--fg);
+      font: inherit;
+      font-size: 17px;
+      letter-spacing: 0.04em;
+    }
+
+    input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .toggle {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      height: 40px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .toggle:hover {
+      color: var(--fg);
+    }
+
+    .error {
+      margin: 12px 2px 0;
+      color: var(--danger);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .primary {
+      width: 100%;
+      height: 54px;
+      margin-top: 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .primary:active {
+      transform: scale(0.99);
+    }
+
+    .primary:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .foot {
+      margin: 22px 0 0;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .foot code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: rgb(255 255 255 / 7%);
+      color: var(--fg);
+      font-size: 11px;
+    }
+
+    @media (max-width: 480px) {
+      .login-card {
+        padding: 24px 20px;
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="login-card">
+    <div class="badge" aria-hidden="true">🔒</div>
+    <p class="eyebrow">TELEPROMPTER</p>
+    <h1>请输入访问密码</h1>
+    <p class="sub">提词器只对知道密码的人开放。登录一次，这台设备 30 天内免密码。</p>
+
+    <form id="login-form" novalidate>
+      <label for="password">访问密码</label>
+      <div class="password-wrap">
+        <input id="password" name="password" type="password" maxlength="200"
+               autocomplete="current-password" enterkeyhint="go" required autofocus>
+        <button id="toggle-password" class="toggle" type="button" aria-label="显示密码">显示</button>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <button id="submit" class="primary" type="submit">进入提词器</button>
+    </form>
+
+    <p class="foot">
+      密码由部署时的 <code>TELEPROMPTER_PASSWORD</code> 决定；<br>
+      首次启动的初始密码见容器日志，或数据目录里的 <code>.access-password</code>。
+    </p>
+  </main>
+
+  <script>
+    const form = document.querySelector("#login-form");
+    const input = document.querySelector("#password");
+    const errorEl = document.querySelector("#error");
+    const submit = document.querySelector("#submit");
+    const toggle = document.querySelector("#toggle-password");
+
+    function safeNext(raw) {
+      if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) {
+        return "/";
+      }
+      return raw;
+    }
+
+    const next = safeNext(new URLSearchParams(location.search).get("next"));
+
+    function showError(message) {
+      errorEl.textContent = message;
+      errorEl.hidden = false;
+    }
+
+    function hideError() {
+      errorEl.hidden = true;
+    }
+
+    function setBusy(busy) {
+      input.disabled = busy;
+      submit.disabled = busy;
+      submit.textContent = busy ? "正在验证…" : "进入提词器";
+    }
+
+    toggle.addEventListener("click", () => {
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      toggle.textContent = showing ? "显示" : "隐藏";
+      toggle.setAttribute("aria-label", showing ? "显示密码" : "隐藏密码");
+      input.focus();
+    });
+
+    input.addEventListener("input", hideError);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!input.value) {
+        showError("请输入密码");
+        input.focus();
+        return;
+      }
+
+      hideError();
+      setBusy(true);
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: input.value }),
+          cache: "no-store",
+        });
+        if (response.status === 401) {
+          showError("密码不正确，请再试一次。");
+          setBusy(false);
+          input.select();
+          return;
+        }
+        if (!response.ok) {
+          showError(`登录失败（HTTP ${response.status}），请稍后再试。`);
+          setBusy(false);
+          return;
+        }
+        location.replace(next);
+      } catch {
+        showError("连接失败，请确认平板和 NAS 在同一个网络。");
+        setBusy(false);
+      }
+    });
+  </script>
+</body>
+</html>

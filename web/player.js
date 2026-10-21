@@ -25,8 +25,10 @@ export async function createPlayer({ script, settings }) {
   const countdownEl = byId("countdown");
   const controls = byId("controls");
   const controlsClose = byId("controls-close");
+  const settingsBtn = byId("settings-btn");
   const hudTitle = byId("hud-title");
   const hudProgress = byId("hud-progress");
+  const hudSpeed = byId("hud-speed");
   const wpmInput = byId("wpm");
   const wpmValue = byId("wpm-value");
   const fontInput = byId("font");
@@ -42,7 +44,6 @@ export async function createPlayer({ script, settings }) {
   const backBtn = byId("back-btn");
   const statusEl = byId("status");
   const wakeNote = byId("wake-note");
-  const wakeStatus = byId("wake-status");
   const fullscreenHint = byId("fullscreen-hint");
   const themeButtons = Array.from(document.querySelectorAll("[data-theme-value]"));
 
@@ -75,11 +76,8 @@ export async function createPlayer({ script, settings }) {
   let lastTs = 0;
   let counting = false;
   let countdownTimer = 0;
-  let controlsTimer = 0;
   let resizeTimer = 0;
   let remeasureRaf = 0;
-  let speedFlashUntil = 0;
-  let speedFlashTimer = 0;
   let progressWasPlaying = false;
   let dragging = false;
   let dragStartY = 0;
@@ -112,8 +110,13 @@ export async function createPlayer({ script, settings }) {
   endOverlay.hidden = true;
   countdownEl.hidden = true;
   controls.classList.remove("open");
+  settingsBtn.hidden = true;
+  settingsBtn.setAttribute("aria-expanded", "false");
   wakeNote.hidden = true;
-  wakeStatus.textContent = "防息屏：未启动";
+
+  function updateHudSpeed() {
+    hudSpeed.textContent = `速度 ${wpm} 字/分`;
+  }
 
   function applyVisuals() {
     document.documentElement.style.setProperty("--font-size", `${fontSize}px`);
@@ -131,6 +134,7 @@ export async function createPlayer({ script, settings }) {
 
     wpmInput.value = String(wpm);
     wpmValue.textContent = String(wpm);
+    updateHudSpeed();
     fontInput.value = String(fontSize);
     fontValue.textContent = String(fontSize);
     lineInput.value = String(lineHeight);
@@ -217,10 +221,14 @@ export async function createPlayer({ script, settings }) {
   function updateProgress() {
     const ratio = total > 0 ? charsRead / total : 0;
     const percent = Math.round(ratio * 100);
-    hudProgress.textContent =
-      performance.now() < speedFlashUntil ? `${wpm} 字/分` : `${percent}%`;
+    hudProgress.textContent = `${percent}%`;
     progressInput.value = String(Math.round(ratio * 1000));
     progressValue.textContent = `${percent}% · ${Math.round(charsRead)}/${total}`;
+  }
+
+  function syncSettingsButton() {
+    const visible = startOverlay.hidden && endOverlay.hidden && !counting;
+    settingsBtn.hidden = !visible;
   }
 
   function setChars(chars) {
@@ -231,7 +239,10 @@ export async function createPlayer({ script, settings }) {
     if (charsRead >= total) {
       if (playing) pause();
       endOverlay.hidden = false;
+    } else if (!endOverlay.hidden) {
+      endOverlay.hidden = true;
     }
+    syncSettingsButton();
   }
 
   function tick(now) {
@@ -247,6 +258,7 @@ export async function createPlayer({ script, settings }) {
       playing = false;
       rafId = 0;
       endOverlay.hidden = false;
+      syncSettingsButton();
       return;
     }
 
@@ -256,9 +268,6 @@ export async function createPlayer({ script, settings }) {
   function startWake() {
     wake.start().then((ok) => {
       wakeNote.hidden = ok;
-      wakeStatus.textContent = ok
-        ? "防息屏：视频播放中"
-        : "防息屏：启动失败，请调长自动锁定";
     });
   }
 
@@ -267,6 +276,7 @@ export async function createPlayer({ script, settings }) {
     startWake();
     if (charsRead >= total) setChars(0);
     endOverlay.hidden = true;
+    syncSettingsButton();
     playing = true;
     lastTs = performance.now();
     cancelAnimationFrame(rafId);
@@ -294,6 +304,7 @@ export async function createPlayer({ script, settings }) {
     endOverlay.hidden = true;
     startOverlay.hidden = true;
     counting = true;
+    syncSettingsButton();
 
     let number = 3;
     countdownEl.textContent = String(number);
@@ -320,40 +331,32 @@ export async function createPlayer({ script, settings }) {
     countdownEl.hidden = true;
     counting = false;
     startOverlay.hidden = false;
+    syncSettingsButton();
   }
 
   function changeWpm(delta) {
     wpm = clamp(wpm + delta, 60, 600);
     wpmInput.value = String(wpm);
     wpmValue.textContent = String(wpm);
-    speedFlashUntil = performance.now() + 800;
-    updateProgress();
-    clearTimeout(speedFlashTimer);
-    speedFlashTimer = window.setTimeout(updateProgress, 820);
+    updateHudSpeed();
     persist();
   }
 
   function openControls() {
     controls.classList.add("open");
-    resetControlsTimer();
+    settingsBtn.classList.add("active");
+    settingsBtn.setAttribute("aria-expanded", "true");
   }
 
   function closeControls() {
     controls.classList.remove("open");
-    clearTimeout(controlsTimer);
-    controlsTimer = 0;
+    settingsBtn.classList.remove("active");
+    settingsBtn.setAttribute("aria-expanded", "false");
   }
 
   function toggleControls() {
     if (controls.classList.contains("open")) closeControls();
     else openControls();
-  }
-
-  function resetControlsTimer() {
-    clearTimeout(controlsTimer);
-    if (controls.classList.contains("open")) {
-      controlsTimer = window.setTimeout(closeControls, 3000);
-    }
   }
 
   function remeasureSoon() {
@@ -489,6 +492,10 @@ export async function createPlayer({ script, settings }) {
 
   on(startBtn, "click", begin);
   on(startSettingsBtn, "click", openControls);
+  on(settingsBtn, "click", (event) => {
+    event.stopPropagation();
+    toggleControls();
+  });
   on(replayBtn, "click", () => {
     endOverlay.hidden = true;
     setChars(0);
@@ -498,12 +505,8 @@ export async function createPlayer({ script, settings }) {
   on(wpmInput, "input", () => {
     wpm = clamp(Number(wpmInput.value) || 220, 60, 600);
     wpmValue.textContent = String(wpm);
-    speedFlashUntil = performance.now() + 800;
-    updateProgress();
-    clearTimeout(speedFlashTimer);
-    speedFlashTimer = window.setTimeout(updateProgress, 820);
+    updateHudSpeed();
     persist();
-    resetControlsTimer();
   });
 
   on(fontInput, "input", () => {
@@ -511,7 +514,6 @@ export async function createPlayer({ script, settings }) {
     applyVisuals();
     persist();
     remeasureSoon();
-    resetControlsTimer();
   });
 
   on(lineInput, "input", () => {
@@ -519,7 +521,6 @@ export async function createPlayer({ script, settings }) {
     applyVisuals();
     persist();
     remeasureSoon();
-    resetControlsTimer();
   });
 
   for (const button of themeButtons) {
@@ -528,7 +529,6 @@ export async function createPlayer({ script, settings }) {
       document.documentElement.dataset.theme = theme;
       applyVisuals();
       persist();
-      resetControlsTimer();
     });
   }
 
@@ -537,7 +537,6 @@ export async function createPlayer({ script, settings }) {
     stage.classList.toggle("flip-x", flipX);
     flipXBtn.classList.toggle("active", flipX);
     persist();
-    resetControlsTimer();
   });
 
   on(flipYBtn, "click", () => {
@@ -545,7 +544,6 @@ export async function createPlayer({ script, settings }) {
     stage.classList.toggle("flip-y", flipY);
     flipYBtn.classList.toggle("active", flipY);
     persist();
-    resetControlsTimer();
   });
 
   on(progressInput, "input", () => {
@@ -554,14 +552,12 @@ export async function createPlayer({ script, settings }) {
       pause();
     }
     setChars((Number(progressInput.value) / 1000) * total);
-    resetControlsTimer();
   });
 
   on(progressInput, "change", () => {
     if (!progressWasPlaying) return;
     progressWasPlaying = false;
     if (charsRead < total) play();
-    else endOverlay.hidden = false;
   });
 
   on(restartBtn, "click", () => {
@@ -598,11 +594,14 @@ export async function createPlayer({ script, settings }) {
     location.hash = "#/";
   }
 
-  on(controls, "pointerdown", resetControlsTimer);
-  on(controls, "input", resetControlsTimer);
   on(controlsClose, "click", closeControls);
   on(backBtn, "click", goLibrary);
   on(endBack, "click", goLibrary);
+
+  on(document, "teleprompter:guide-open", () => {
+    pause();
+    cancelCountdown();
+  });
 
   on(stage, "touchstart", onTouchStart, { passive: false });
   on(stage, "touchmove", onTouchMove, { passive: false });
@@ -615,13 +614,22 @@ export async function createPlayer({ script, settings }) {
   on(stage, "click", onStageClick);
 
   on(window, "keydown", (event) => {
+    if (event.defaultPrevented) return;
+    if (document.documentElement.dataset.guide === "open") return;
+    if (!ready) return;
+
+    if (event.code === "Escape" && controls.classList.contains("open")) {
+      event.preventDefault();
+      closeControls();
+      return;
+    }
+
     if (
       event.target instanceof Element &&
       event.target.closest("input, .controls")
     ) {
       return;
     }
-    if (!ready) return;
 
     if (!startOverlay.hidden) {
       if (event.code === "Space") {
@@ -685,7 +693,6 @@ export async function createPlayer({ script, settings }) {
       pause();
       cancelCountdown();
       wake.stop();
-      wakeStatus.textContent = "防息屏：已暂停（切后台）";
     }
   });
 
@@ -694,9 +701,7 @@ export async function createPlayer({ script, settings }) {
     cleanups.length = 0;
     pause();
     clearInterval(countdownTimer);
-    clearTimeout(controlsTimer);
     clearTimeout(resizeTimer);
-    clearTimeout(speedFlashTimer);
     cancelAnimationFrame(rafId);
     cancelAnimationFrame(remeasureRaf);
     wake.destroy();

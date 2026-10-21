@@ -12,7 +12,10 @@ def client(tmp_path, monkeypatch):
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     monkeypatch.setattr(app_main, "SCRIPTS_DIR", scripts)
-    return TestClient(app)
+    client = TestClient(app)
+    login = client.post("/api/login", json={"password": "test-pass"})
+    assert login.status_code == 200
+    return client
 
 
 def _url(script_id: str) -> str:

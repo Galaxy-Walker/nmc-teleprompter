@@ -13,3 +13,7 @@ __pycache__/
 *.log
 *.docx
 !samples/*.docx
+
+# 本地密码配置：模板 .env.example 可以提交，真实 .env 不要入库
+.env
+.env.local

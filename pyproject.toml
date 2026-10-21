@@ -1,6 +1,6 @@
 [project]
 name = "teleprompter"
-version = "0.1.0"
+version = "0.1.1"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.150.0",

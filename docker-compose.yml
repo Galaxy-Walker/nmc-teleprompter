@@ -18,6 +18,8 @@ services:
       DATA_DIR: /data
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
+      # 留空时首次启动会生成随机密码并打印到容器日志；建议用 .env.example 复制出 .env 显式设置。
+      TELEPROMPTER_PASSWORD: "${TELEPROMPTER_PASSWORD:-}"
     command: ["bash", "/app/start.sh"]
     restart: unless-stopped
     healthcheck:

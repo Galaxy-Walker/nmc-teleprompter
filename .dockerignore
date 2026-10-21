@@ -4,6 +4,7 @@
 .venv
 venv
 data
+.env
 tests
 .tmp
 .pytest_cache

@@ -1,4 +1,5 @@
-import { getScript } from "./api.js";
+import { getScript, logout } from "./api.js";
+import { initGuide } from "./guide.js";
 import { initLibrary, refreshLibrary } from "./library.js";
 import { createPlayer } from "./player.js";
 import { applySettings, loadSettings } from "./settings.js";
@@ -6,6 +7,7 @@ import { applySettings, loadSettings } from "./settings.js";
 const libraryView = document.querySelector("#library-view");
 const playerView = document.querySelector("#player-view");
 const statusEl = document.querySelector("#status");
+const logoutBtn = document.querySelector("#logout-btn");
 
 const settings = loadSettings();
 applySettings(settings);
@@ -13,7 +15,18 @@ applySettings(settings);
 let player = null;
 let routeToken = 0;
 
+initGuide();
 initLibrary();
+
+logoutBtn?.addEventListener("click", async () => {
+  logoutBtn.disabled = true;
+  try {
+    await logout();
+  } catch {
+    // The cookie may already be expired; either way, go back to the gate.
+  }
+  location.replace("/login");
+});
 
 function parseRoute() {
   const match = location.hash.match(/^#\/play\/(.+)$/);

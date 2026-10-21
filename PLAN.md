@@ -29,7 +29,7 @@
 | 文档内容 | 只需要**纯文本段落**，不需要标题样式/图片/表格/公式 |
 | 输入格式 | `.md` / `.docx`（另送 `.txt` 与「直接粘贴文本」兜底） |
 | 滚动模型 | 匀速连续滚动，语速单位 = **字/分钟** |
-| 访问方式 | 仅校园网内网，`http://NAS_IP:端口`，无 HTTPS、无鉴权 |
+| 访问方式 | 仅校园网内网，`http://NAS_IP:端口`，无 HTTPS；一个简单访问密码 |
 | 技术栈 | Python(FastAPI) 后端 + **无构建**原生前端 |
 | 显示 | 镜像翻转（水平）+ 上下翻转（垂直）两个独立开关 |
 | 稿件库 | **Tier 1**：后端 + 文件系统稿件库（见 §4） |
@@ -48,12 +48,14 @@
 - 防息屏：带静音音轨的 WebM/MP4 循环
 - 开播前 3-2-1 倒计时
 - 触控分区操作
+- 简单访问密码（30 天 Cookie）
+- 操作教程与设置入口
 - 键盘快捷键（接电脑时）
 
 **不做**：
 
 - 多设备遥控（手机控平板）
-- 账号/鉴权
+- 完整账号体系（多用户/权限）
 - HTTPS
 - 逐屏翻页模式
 - 标题样式/图片/表格/公式渲染
@@ -83,7 +85,7 @@
 
 一个容器、一个端口、一个数据卷。前端静态文件由 FastAPI 的 `StaticFiles` 直接托管，不引入 nginx。
 
-**缓存策略**：HTML/JS/CSS 返回 `Cache-Control: no-cache`（每次刷新都能拿到新前端），API 返回 `no-store`。这样「改前端只需刷新页面」在 Safari 上也成立，不依赖用户手动清缓存。
+**缓存策略**：HTML/JS/CSS 返回 `Cache-Control: no-cache`（每次刷新都能拿到新前端），API 和 `/login` 返回 `no-store`。这样「改前端只需刷新页面」在 Safari 上也成立，不依赖用户手动清缓存。
 
 ---
 
@@ -324,17 +326,19 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 - 中 50%：暂停 / 继续
 - 暂停状态下：单指上下拖动自由定位
 - 双指点击（`preventDefault`，避免触发浏览器手势），或点逻辑顶部 5% 边缘：呼出控制条
-- 控制条 3 秒无操作自动隐藏；任何控制条交互都重置计时
+- 右上角常驻「⚙ 设置」按钮，是最明显的入口
+- 控制条**不自动隐藏**；只有点「关闭」、再点「⚙ 设置」或点画面空白处才收起
 
 ### 6.4 控制条
 
-- 速度滑杆 + 数字（60–600）
+- 速度滑杆 + 数字（60–600）；右上角小字常显当前速度
 - 字号（32–96px，默认 48）
 - 行距（1.3–2.0，默认 1.6）
 - 镜像 X、镜像 Y
 - 配色：暗底白字 / 亮底黑字 / 黑底琥珀字
 - 全屏（安卓）
 - 进度条（可拖）
+- 「📖 使用教程」入口：首次访问自动弹出，讲清暂停、调速、快进、设置、镜像和快捷键
 - 返回稿件库
 
 ### 6.5 键盘快捷键（接笔记本时）
@@ -344,6 +348,7 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 - `←` / `→` 前后跳 5 秒
 - `F` 全屏
 - `M` 镜像 X
+- `Esc` 关闭设置
 - 输入框聚焦时忽略快捷键
 
 ### 6.6 稿件库页
@@ -401,17 +406,21 @@ teleprompter/
 ├── requirements.txt        # uv export 生成，部署用（固定版本）
 ├── Dockerfile              # 可选，仅路径 B/C 需要
 ├── docker-compose.yml      # 路径 A 主用
+├── .env.example            # 访问密码模板（复制为 .env）
 ├── docker/
 │   └── start.sh            # 建 venv + 按 requirements 哈希安装 + exec uvicorn
 ├── app/
-│   ├── main.py             # FastAPI 应用、路由、静态托管、缓存头
+│   ├── main.py             # FastAPI 应用、路由、密码门、静态托管、缓存头
+│   ├── auth.py             # 访问密码解析 / 会话 Cookie 校验
 │   ├── library.py          # 稿件库：列目录 / 存 / 读 / 改 / 删、ID 校验
 │   └── parse.py            # docx|md|txt → 段落列表 + 字数口径
 ├── web/
-│   ├── index.html          # 稿件库 + 播放页两个 section
+│   ├── index.html          # 稿件库 + 播放页 + 教程弹层
+│   ├── login.html          # 访问密码登录页（内联样式/脚本）
 │   ├── style.css           # CSS 变量驱动字号/行距/配色/翻转
 │   ├── app.js              # 入口 + hash 路由（#/、#/play/<id>）
-│   ├── api.js              # fetch 封装
+│   ├── api.js              # fetch 封装（401 跳登录）
+│   ├── guide.js            # 首次使用教程 / 各入口弹层
 │   ├── library.js          # 稿件库视图 + 上传/粘贴/重命名/删除
 │   ├── player.js           # 播放核心：测量 / 映射 / 滚动 / 触控
 │   ├── settings.js         # 设置项 + localStorage 持久化
@@ -419,6 +428,7 @@ teleprompter/
 ├── tests/
 │   ├── probe_docx_textbox.py
 │   ├── test_health.py      # health/静态页/只读 scripts 接口
+│   ├── test_auth.py        # 登录、Cookie、退出、改密失效、路径跳转
 │   ├── test_parse.py       # md/docx/txt 解析、编码、字数
 │   ├── test_library.py     # 示例种子、CRUD、重名、路径穿越
 │   └── test_api.py         # 上传/粘贴/重命名/删除
@@ -468,7 +478,9 @@ DELETE /api/scripts/{id}     → 204
 
 ### 9.4 安全边界
 
-- 无鉴权是需求，但**只能在内网使用**；不要把 8300 映射到公网
+- 全局密码门：`TELEPROMPTER_PASSWORD`，未设置时首次启动生成随机密码存 `data/.access-password` 并打印日志；会话 Cookie 30 天，改密码后旧 Cookie 自动失效
+- 只有 `/api/health`、`/login`、`/api/login` 公开；其余页面/CSS/JS/API 未登录分别跳登录页或返回 401
+- 这是**简单密码门**，不是完整鉴权：内网 HTTP 下密码和 Cookie 明文传输，只能防误入；不要把 8300 映射到公网
 - 上传大小、扩展名、文件头三重校验
 - `id` 正则 + `resolve()` 边界检查，防路径穿越
 - 不执行上传内容；docx 只读 XML，不解压到磁盘
@@ -486,7 +498,7 @@ DELETE /api/scripts/{id}     → 204
 | **P4** | compose（路径 A）→ 绿联 Docker「项目」部署，写 README | 先用 hello-world 验证项目页；再部署正式服务；NAS 重启后容器自启，稿件还在 |
 | **P5** | 打磨：设置面板收纳、误触防护、横竖屏切换重测量、万字稿性能 | 只在实测有问题时做；不做提前优化 |
 
-> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），Android 实机复测通过，**iPad 实机未测**；P4 的 compose / Dockerfile / start.sh 已实现并完成本机启动冒烟；**2026-10-21 已在绿联 UGOS Pro 的 Docker「项目」中实机部署并正常使用**，NAS 重启后的自启/`data/` 持久化待验收。
+> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**42 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），Android 实机复测通过，**iPad 实机未测**；P4 的 compose / Dockerfile / start.sh 已实现并完成本机启动冒烟；**2026-10-21 已在绿联 UGOS Pro 的 Docker「项目」中实机部署并正常使用**，NAS 重启后的自启/`data/` 持久化待验收。
 
 ---
 
@@ -533,6 +545,7 @@ services:
       DATA_DIR: /data
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
+      TELEPROMPTER_PASSWORD: "${TELEPROMPTER_PASSWORD:-}"
     command: ["bash", "/app/start.sh"]
     restart: unless-stopped
     healthcheck:
@@ -625,7 +638,7 @@ exec "$BIN_DIR/uvicorn" app.main:app \
 > 2026-10-21 已按此路径在 UGOS Pro 上部署成功；以下保留为重装/迁移步骤。
 
 0. **先做连通性预检**：在 Docker「项目」里跑一个 hello-world 或 nginx，确认项目页能创建、相对路径能挂载、端口能映射、日志能看。再部署正式服务，避免把 UGOS 问题误判成应用问题。
-1. 绿联文件管理器：在 `docker` 共享文件夹下新建目录 `teleprompter`，把项目的 `app/`、`web/`、`samples/`、`docker/`、`requirements.txt`、`docker-compose.yml` 传进去；顺手建一个空的 `data/` 目录。若走路径 B/C，再把 `Dockerfile`、`.dockerignore` 一起传上去。
+1. 绿联文件管理器：在 `docker` 共享文件夹下新建目录 `teleprompter`，把项目的 `app/`、`web/`、`samples/`、`docker/`、`requirements.txt`、`docker-compose.yml`、`.env.example` 传进去；顺手建一个空的 `data/` 目录，并把 `.env.example` 复制为 `.env` 填好密码。若走路径 B/C，再把 `Dockerfile`、`.dockerignore` 一起传上去。
 2. Docker 应用 → **项目** → 创建 → 名称填 `teleprompter`。如果页面要求选择存放路径，选第 1 步的目录；如果按项目名自动生成，确认它指向同一目录。不要重复建。粘贴 §11.2 的 yaml（也可从 NAS 存储导入文件）→ 部署。
 3. 打开该项目的「日志」页，看到 `Uvicorn running on http://0.0.0.0:8000` 即成功。
 4. 平板浏览器访问 `http://<NAS_IP>:8300/api/health`，返回 `{"ok":true}` 说明网络通；再访问 `http://<NAS_IP>:8300`。
@@ -642,7 +655,9 @@ cd <项目目录>                  # 以项目页显示的存放路径为准，�
 docker build -t teleprompter:latest .
 docker rm -f teleprompter 2>/dev/null || true
 docker run -d --name teleprompter --restart unless-stopped \
-  -p 8300:8000 -v "$PWD/data:/data" teleprompter:latest
+  -p 8300:8000 -v "$PWD/data:/data" \
+  -e TELEPROMPTER_PASSWORD="换成你的密码" \
+  teleprompter:latest
 ```
 
 镜像里已设 `DATA_DIR=/data`，所以 `docker run` 只需挂载 `./data`；不需要 compose CLI。
@@ -741,7 +756,7 @@ uv run pytest
 
 - `uvicorn` 不带 `[standard]`：uvicorn 本体只需要 h11 + click，少装 uvloop/httptools/websockets 等；开发时的 `--reload` 由 dev 依赖 `watchfiles` 提供。
 - `TestClient` 用 `httpx2`：Starlette 1.9 起旧 `httpx` 会触发弃用警告；它只用于测试，不进部署 `requirements.txt`。
-- `pyproject.toml` 里配了 `[tool.pytest.ini_options]` 的 `testpaths` / `pythonpath`；`uv run pytest` 能直接 `import app`，不需要为了 `sys.path` 额外加 `conftest.py`（`tests/conftest.py` 只放 docx fixture）。
+- `pyproject.toml` 里配了 `[tool.pytest.ini_options]` 的 `testpaths` / `pythonpath`；`uv run pytest` 能直接 `import app`，不需要为了 `sys.path` 额外加 `conftest.py`（`tests/conftest.py` 放 docx fixture，并把测试密码固定为 `test-pass`）。
 - `--host 0.0.0.0` 让平板能直接用电脑 IP 访问，**P0 阶段先用这个验证校园网连通性**，通了再谈容器化。
 - Windows 首次运行会弹防火墙，勾选「专用网络」；否则平板访问不到。
 - 本机 `DATA_DIR` 默认 `./data`（已在 `.gitignore` 里）；容器里是 `/data`。
@@ -803,7 +818,7 @@ uv run pytest
 10. **API 双 Content-Type**：原草案同时支持 multipart 和 JSON；改为统一 FormData，少一个分支。
 11. **字数口径两套**：原计划前后端各算一遍；改为后端返回每段 `units`，前端只加总。
 12. **`uvicorn[standard]`**：部署用不到 uvloop/websockets；改为普通 `uvicorn`，开发用 `watchfiles` 提供 `--reload`。
-13. **防息屏媒体**：muted/无音轨视频在 Android Chromium 下不阻止休眠；改为带静音音轨的 WebM/MP4（**不 muted**），并在控制条显示「防息屏：视频播放中」。
+13. **防息屏媒体**：muted/无音轨视频在 Android Chromium 下不阻止休眠；改为带静音音轨的 WebM/MP4（**不 muted**），失败时在画面底部提示。
 
 **简化的地方**：
 

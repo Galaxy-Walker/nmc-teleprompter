@@ -9,11 +9,14 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.auth import COOKIE_MAX_AGE, COOKIE_NAME, AccessControl
 from app.library import (
     create_from_text,
     create_from_upload,
@@ -41,12 +44,63 @@ try:
 except Exception:  # a bad sample must not stop the health endpoint
     log.exception("failed to seed demo script")
 
-app = FastAPI(title="Teleprompter", version="0.1.0")
+ACCESS = AccessControl.resolve(DATA_DIR, log)
+if not ACCESS.generated:
+    log.info("访问密码已就绪（来源：TELEPROMPTER_PASSWORD 或 data/.access-password）")
+
+# The health check must stay reachable for Docker; the login page and login
+# endpoint are public by definition.
+PUBLIC_PATHS = {"/api/health", "/api/login", "/login"}
+
+app = FastAPI(title="Teleprompter", version="0.1.1")
 
 
 class ScriptPatch(BaseModel):
     title: str | None = None
     text: str | None = None
+
+
+class LoginPayload(BaseModel):
+    password: str = ""
+
+
+def safe_next(raw: str | None) -> str:
+    """Only allow same-site absolute paths as the post-login destination."""
+    if not raw or not raw.startswith("/") or raw.startswith("//"):
+        return "/"
+    if "\\" in raw or "\r" in raw or "\n" in raw:
+        return "/"
+    return raw
+
+
+@app.get("/login", include_in_schema=False)
+def login_page() -> FileResponse:
+    return FileResponse(
+        WEB_DIR / "login.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/api/login")
+def login(payload: LoginPayload, response: Response) -> dict[str, bool]:
+    if not ACCESS.check(payload.password):
+        raise HTTPException(status_code=401, detail="密码不正确")
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=ACCESS.token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/logout")
+def logout(response: Response) -> dict[str, bool]:
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"ok": True}
 
 
 @app.get("/api/health")
@@ -124,10 +178,25 @@ def remove_script(script_id: str) -> None:
 
 
 @app.middleware("http")
-async def cache_control(request: Request, call_next):
-    """Keep the frontend fresh after an overwrite, and API responses uncached."""
+async def gate_and_cache(request: Request, call_next):
+    """Require a session cookie, then keep frontend/API caches fresh."""
+    path = request.url.path
+    authed = ACCESS.is_authenticated(request.cookies.get(COOKIE_NAME))
+
+    if path == "/login" and authed:
+        return RedirectResponse(safe_next(request.query_params.get("next")), status_code=303)
+
+    if path not in PUBLIC_PATHS and not authed:
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "需要密码"}, status_code=401)
+        target = "/login"
+        if path not in ("", "/"):
+            suffix = path + (f"?{request.url.query}" if request.url.query else "")
+            target = "/login?next=" + quote(suffix, safe="")
+        return RedirectResponse(target, status_code=303)
+
     response = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    if path.startswith("/api/") or path == "/login":
         response.headers["Cache-Control"] = "no-store"
     else:
         response.headers["Cache-Control"] = "no-cache"
