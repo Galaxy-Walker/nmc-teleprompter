@@ -41,7 +41,7 @@ try:
 except Exception:  # a bad sample must not stop the health endpoint
     log.exception("failed to seed demo script")
 
-app = FastAPI(title="Teleprompter", version="0.2.0")
+app = FastAPI(title="Teleprompter", version="0.1.0")
 
 
 class ScriptPatch(BaseModel):
