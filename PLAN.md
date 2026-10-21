@@ -392,8 +392,9 @@ content.style.transform = `translate3d(0, ${-y}px, 0)`;
 ```
 teleprompter/
 ├── PLAN.md                 # 本文件
-├── README.md               # 部署与使用说明（最后写）
+├── README.md               # 使用与 NAS 部署说明
 ├── .gitattributes          # *.sh eol=lf，防止 Windows 把 start.sh 写成 CRLF
+├── .dockerignore           # 构建镜像时排除 data/venv/tests，减小上下文
 ├── .python-version         # uv pin 3.12，保证本机和容器都用 3.12
 ├── pyproject.toml          # uv 管理：fastapi / uvicorn / python-multipart；requires-python = ">=3.12,<3.13"
 ├── uv.lock
@@ -485,7 +486,7 @@ DELETE /api/scripts/{id}     → 204
 | **P4** | compose（路径 A）→ 绿联 Docker「项目」部署，写 README | 先用 hello-world 验证项目页；再部署正式服务；NAS 重启后容器自启，稿件还在 |
 | **P5** | 打磨：设置面板收纳、误触防护、横竖屏切换重测量、万字稿性能 | 只在实测有问题时做；不做提前优化 |
 
-> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），并通过无头检查；**待 Android 复测 5 分钟不息屏 + iPad 实机确认**。
+> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），Android 实机复测通过，**iPad 实机未测**；P4 的 compose / Dockerfile / start.sh 已实现，并完成本机启动冒烟（首次装依赖、二次跳过、`/api/health` 正常），**待绿联 NAS 实机部署**。
 
 ---
 
@@ -497,7 +498,7 @@ DELETE /api/scripts/{id}     → 204
 | --- | --- | --- | --- |
 | 需要 SSH | 不需要 | 需要 | 不需要 |
 | 需要本机装 Docker | 不需要 | 不需要 | 需要（你目前没有） |
-| 需要 `docker compose` CLI | 不需要（UGOS 项目页代劳） | 需要（老 UGOS 没有，得自己 wget 二进制） | 不需要 |
+| 需要 `docker compose` CLI | 不需要（UGOS 项目页代劳） | 不需要（直接 `docker build` / `docker run`） | 不需要 |
 | 更新代码 | 覆盖文件 → 重新部署；前端改动只需刷新页面 | 重新 build | 重新构建 + 重新导入 |
 | 代价 | 首次启动联网装依赖；之后按 requirements 哈希判断，不重复装 | SSH 是临时口令，3 天过期 | 每次改动都很重 |
 
@@ -521,6 +522,7 @@ services:
     volumes:
       - ./app:/app/app:ro
       - ./web:/app/web:ro
+      - ./samples:/app/samples:ro
       - ./docker/start.sh:/app/start.sh:ro
       - ./requirements.txt:/app/requirements.txt:ro
       - ./data:/data
@@ -530,8 +532,15 @@ services:
       PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
       DATA_DIR: /data
       PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     command: ["bash", "/app/start.sh"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 ```
 
 启动脚本 `docker/start.sh`（**LF 换行**）：
@@ -540,21 +549,39 @@ services:
 #!/usr/bin/env bash
 set -euo pipefail
 
-REQ=/app/requirements.txt
-VENV=/app/.venv
-STAMP="$VENV/.req.sha256"
+APP_DIR="${APP_DIR:-/app}"
+REQ_FILE="${REQ_FILE:-$APP_DIR/requirements.txt}"
+VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
+STAMP="$VENV_DIR/.req.sha256"
 
-want="$(sha256sum "$REQ" | cut -d' ' -f1)"
+# Linux venvs use bin/, Windows uses Scripts/. The latter only matters for
+# local smoke tests; the container always takes the bin/ branch.
+resolve_bin() {
+  if [ -x "$VENV_DIR/bin/python" ] || [ -x "$VENV_DIR/bin/python.exe" ]; then
+    printf '%s\n' "$VENV_DIR/bin"
+  else
+    printf '%s\n' "$VENV_DIR/Scripts"
+  fi
+}
+
+BIN_DIR="$(resolve_bin)"
+want="$(sha256sum "$REQ_FILE" | cut -d' ' -f1)"
 have="$(cat "$STAMP" 2>/dev/null || true)"
 
-if [ ! -x "$VENV/bin/uvicorn" ] || [ "$want" != "$have" ]; then
-  python -m venv "$VENV"
-  "$VENV/bin/pip" install --no-cache-dir -r "$REQ"
+if [ "$want" != "$have" ] || [ ! -x "$BIN_DIR/uvicorn" ]; then
+  echo "[teleprompter] installing dependencies from $REQ_FILE ..."
+  python -m venv "$VENV_DIR"
+  BIN_DIR="$(resolve_bin)"
+  "$BIN_DIR/pip" install --no-cache-dir --disable-pip-version-check -r "$REQ_FILE"
   printf '%s\n' "$want" > "$STAMP"
+  echo "[teleprompter] dependencies ready"
 fi
 
-exec "$VENV/bin/uvicorn" app.main:app \
-  --host 0.0.0.0 --port 8000 --app-dir /app
+echo "[teleprompter] starting on ${HOST:-0.0.0.0}:${PORT:-8000}"
+exec "$BIN_DIR/uvicorn" app.main:app \
+  --host "${HOST:-0.0.0.0}" \
+  --port "${PORT:-8000}" \
+  --app-dir "$APP_DIR"
 ```
 
 为什么这么写：
@@ -565,7 +592,10 @@ exec "$VENV/bin/uvicorn" app.main:app \
 - **不写 `platform`**：`python:3.12-slim-bookworm` 是多架构镜像，自动匹配 amd64/arm64；强行写 amd64 反而有风险。
 - **不写 `container_name`**：项目名已经能定位容器，少一个重名冲突点。
 - **`app`/`web` 只读挂载**：应用不需要写代码目录；`PYTHONDONTWRITEBYTECODE=1` 避免只读挂载下写 `__pycache__`。
+- **`samples` 只读挂载**：首次空库时仍能生成示例稿；不需要示例可删掉这一行。
 - **`./venv` 独立挂载**：重建容器不用重装依赖；首次启动约 30–60 秒，之后秒起。
+- **healthcheck**：用镜像自带 `python` 请求 `/api/health`；`start_period: 90s` 覆盖首次 pip 安装，避免刚启动就显示 unhealthy。
+- **`PYTHONUNBUFFERED=1`**：日志即时进 Docker 日志页，首次安装排错不用猜。
 
 ### 11.3 卷路径、权限、首次启动
 
@@ -593,7 +623,7 @@ exec "$VENV/bin/uvicorn" app.main:app \
 ### 11.4 操作步骤（路径 A，全程点鼠标）
 
 0. **先做连通性预检**：在 Docker「项目」里跑一个 hello-world 或 nginx，确认项目页能创建、相对路径能挂载、端口能映射、日志能看。再部署正式服务，避免把 UGOS 问题误判成应用问题。
-1. 绿联文件管理器：在 `docker` 共享文件夹下新建目录 `teleprompter`，把项目的 `app/`、`web/`、`docker/`、`requirements.txt`、`docker-compose.yml` 传进去；顺手建一个空的 `data/` 目录。
+1. 绿联文件管理器：在 `docker` 共享文件夹下新建目录 `teleprompter`，把项目的 `app/`、`web/`、`samples/`、`docker/`、`requirements.txt`、`docker-compose.yml` 传进去；顺手建一个空的 `data/` 目录。若走路径 B/C，再把 `Dockerfile`、`.dockerignore` 一起传上去。
 2. Docker 应用 → **项目** → 创建 → 名称填 `teleprompter`。如果页面要求选择存放路径，选第 1 步的目录；如果按项目名自动生成，确认它指向同一目录。不要重复建。粘贴 §11.2 的 yaml（也可从 NAS 存储导入文件）→ 部署。
 3. 打开该项目的「日志」页，看到 `Uvicorn running on http://0.0.0.0:8000` 即成功。
 4. 平板浏览器访问 `http://<NAS_IP>:8300/api/health`，返回 `{"ok":true}` 说明网络通；再访问 `http://<NAS_IP>:8300`。
@@ -607,33 +637,43 @@ exec "$VENV/bin/uvicorn" app.main:app \
 ```bash
 ssh root@<NAS_IP> -p 922      # 社区帖：端口 922；密码 = 开启「远程调试」时手机收到的验证码，3 天有效
 cd <项目目录>                  # 以项目页显示的存放路径为准，可能是 /volume1、/volume2 或 /volume
-docker compose up -d --build
-```
-
-没有 compose CLI 时，退回纯 docker：
-
-```bash
 docker build -t teleprompter:latest .
+docker rm -f teleprompter 2>/dev/null || true
 docker run -d --name teleprompter --restart unless-stopped \
   -p 8300:8000 -v "$PWD/data:/data" teleprompter:latest
 ```
+
+镜像里已设 `DATA_DIR=/data`，所以 `docker run` 只需挂载 `./data`；不需要 compose CLI。
 
 ### 11.5 Dockerfile（可选，仅路径 B/C）
 
 ```dockerfile
 FROM python:3.12-slim-bookworm
+
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
-ENV UV_COMPILE_BYTECODE=1 \
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0 \
     UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
-    PYTHONDONTWRITEBYTECODE=1
+    DATA_DIR=/data
+
 WORKDIR /app
+
+# 依赖先装，改代码时可复用这一层。
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+
 COPY app ./app
 COPY web ./web
+COPY samples ./samples
+
+# virtual project：这里只补齐环境，不会构建/安装项目本身。
 RUN uv sync --frozen --no-dev
+
+RUN mkdir -p /data
 EXPOSE 8000
 CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "/app"]
 ```
@@ -658,6 +698,7 @@ CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8
 | 校园网拉 `docker.io` 慢或不通（路径 A 也要拉 `python:3.12-slim-bookworm`） | 在绿联 Docker 设置里配置镜像加速器；这是路径 A 唯一的镜像拉取依赖 |
 | PyPI 拉包慢/不通 | compose 里已设 `PIP_INDEX_URL` 指向清华源；失败时换成可达的源 |
 | 首次启动装依赖，8300 暂时打不开 | 看日志等 `Uvicorn running`；requirements 哈希不变时后续重启不联网 |
+| 首次启动容器显示 unhealthy | `start_period` 是 90s，pip 更慢时属正常；日志出现 `Uvicorn running` 后会转 healthy |
 | 8300 端口被占用 | compose 里改宿主机端口即可 |
 | NAS 重启后服务没起 | `restart: unless-stopped` 已覆盖；绿联 Docker 面板里也可设为开机自启 |
 | `./data` 权限/属主不符合预期 | 先手动建 `data/`；应用以 root 写入；不要依赖 PUID/PGID，也不要随手加 `user:` |

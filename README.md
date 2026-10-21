@@ -2,14 +2,14 @@
 
 内网自用的平板提词器：浏览器打开，上传 md / docx / txt，镜像翻转，按「字/分钟」匀速滚动。
 
-**当前阶段：P0–P3 代码已实现，P4（Docker / 绿联 NAS 部署）尚未开始；P3 的 Android / iPad 防息屏仍在实机验证。**
+**当前阶段：P0–P3 已实现；P4 的 Docker 文件已就绪，等待在绿联 NAS 上实机部署。**
 
 ## 实机测试状态（重要）
 
-- **Android 平板**：已做过浏览器验证（稿件库、播放、镜像、触控、上传）。
+- **Android 平板**：实机验证通过（稿件库、播放、镜像、触控、上传、防息屏）。
 - **iPad**：手边没有 iPad，**未做任何实机验证**。iPad Safari 的播放、镜像、全屏降级、添加到主屏幕、长时间防息屏都待验证。
 - **防息屏**：播放时会启动一段带静音音轨的常驻视频（Android 优先 WebM，iOS 用 MP4），控制条里会显示「防息屏：视频播放中」。
-  - 如果 Android 上仍然息屏：先开控制条确认状态；若显示「视频播放中」但系统仍锁屏，说明该浏览器/系统不认这个兜底，请把系统的「自动锁定」时间调长。
+  - 如果某台设备仍然息屏：先开控制条确认状态；若显示「视频播放中」但系统仍锁屏，说明该浏览器/系统不认这个兜底，请把系统的「自动锁定」时间调长。
   - HTTP 内网不是 secure context，`navigator.wakeLock` 不可用，所以没有走标准 Wake Lock API。
 
 ## 功能
@@ -88,6 +88,78 @@ data/scripts/<id>/
 - `.venv/`、`venv/` 是依赖缓存，可删可重建，不需要备份。
 - 示例稿只在首次启动、稿件库为空时生成一次；删掉后重启不会复活。
 
+## 部署到绿联 NAS（Docker）
+
+推荐用 UGOS Pro 的 Docker 应用 →「项目」直接粘贴 compose：不 SSH、不在 NAS 上构建镜像。
+
+### 1. 准备文件
+
+在 NAS 的 `docker` 共享文件夹下新建 `teleprompter/`，只上传这些：
+
+```text
+teleprompter/
+├── app/
+├── web/
+├── samples/
+├── docker/start.sh
+├── requirements.txt
+└── docker-compose.yml
+```
+
+再手动建一个空目录 `data/`，稿件会写在这里。不要上传本机的 `.venv/`、`tests/`、`.tmp/`；迁移旧稿件时只拷 `data/`。
+
+### 2. 创建项目
+
+1. 第一次用「项目」页，建议先跑一个 hello-world 或 nginx，确认端口映射、相对路径、日志都正常，再部署本项目。
+2. Docker 应用 → 项目 → 创建，名称填 `teleprompter`，存放路径选第 1 步的目录。
+3. 粘贴 `docker-compose.yml` 的内容（或从 NAS 存储导入文件），点部署。
+4. 首次启动会在容器内建 `venv` 并按 `requirements.txt` 安装依赖，约 30–60 秒；日志出现 `Uvicorn running on http://0.0.0.0:8000` 即成功。健康检查要等这个阶段结束才会变绿。
+
+如果项目页按名称自动生成目录，确认它和上传目录是同一个；不是的话把文件移到项目目录，或删掉项目重建。
+
+### 3. 访问
+
+```text
+http://<NAS_IP>:8300/api/health   # 期望 {"ok":true}
+http://<NAS_IP>:8300
+```
+
+宿主机端口是 `8300`，容器内是 `8000`。要改端口，改 compose 里 `"8300:8000"` 的左边。
+
+首次部署建议按这个顺序验收：健康检查 → 上传一篇稿 → 播放/镜像 → 重启 NAS → 再访问，确认容器自启且稿件还在。
+
+### 4. 更新代码
+
+- 前端：覆盖 `web/` 下的文件，平板刷新页面即可（响应头 `no-cache`）。
+- 后端：覆盖 `app/` 下的文件，在项目页点「重新部署」。
+- 依赖：改 `pyproject.toml` → `uv lock` → 重新导出 `requirements.txt` → 覆盖后重新部署。启动脚本按 requirements 的 SHA-256 判断，变了才重装。
+
+### 5. 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 没有「项目」标签页 | UGOS 版本较老；升级系统，或用下面的 Dockerfile |
+| 拉不到 `python:3.12-slim-bookworm` | 在绿联 Docker 设置里配置镜像加速器 |
+| pip 慢或失败 | compose 已用清华源；换成 NAS 能访问的 `PIP_INDEX_URL` |
+| 8300 打不开 | 看项目日志；确认 NAS 防火墙放行 8300/TCP，平板和 NAS 同网段 |
+| 容器一直 unhealthy | 首次安装可能超过 90 秒，等日志出现 `Uvicorn running`；仍不行就看 pip 报错 |
+| `data/` 里的文件属主是 root | 官方镜像默认 root；先手动建 `data/`，不要随手加 `user:` |
+| 启动脚本报 `$'\r'` | `docker/start.sh` 必须是 LF；仓库已用 `.gitattributes` 固定 |
+
+> `docker-compose.yml` 和 `docker/start.sh` 已在本机做过启动冒烟（首次装依赖、二次跳过、`/api/health` 正常），但**尚未在你的 UGOS 上实机部署**；按上面的顺序先验健康检查，再导入正式稿件。
+
+### 可选：自己构建镜像
+
+如果「项目」页不可用，或想固定镜像：把根目录的 `Dockerfile` 和 `.dockerignore` 也传到项目目录，然后：
+
+```bash
+docker build -t teleprompter:latest .
+docker run -d --name teleprompter --restart unless-stopped \
+  -p 8300:8000 -v "$PWD/data:/data" teleprompter:latest
+```
+
+Dockerfile 里已设 `DATA_DIR=/data`；数据仍然只在 `data/`。路径 B/C 的细节见 `PLAN.md` §11。
+
 ## 开发与测试
 
 ```powershell
@@ -108,16 +180,20 @@ uv export --no-dev --no-emit-project --no-hashes --no-header --no-annotate -o re
 ```text
 app/            FastAPI、稿件库、md/docx/txt 解析
 web/            无构建前端（稿件库 + 播放器）
+docker/         容器启动脚本 start.sh
 tests/          解析/稿件库/API 测试 + docx 探针
 samples/        示例稿
 data/           运行时稿件（不入库）
+Dockerfile      可选，自建镜像时用
+docker-compose.yml  绿联「项目」部署
 PLAN.md         技术方案与已知坑
 ```
 
 ## 下一步
 
-- **P4**：Dockerfile / compose / start.sh / 绿联 UGOS「项目」部署、README 部署章节
-- **P5**：横竖屏重测量、万字稿性能、误触防护等打磨
+- **P4（进行中）**：按上面的部署章节在绿联 NAS 实机部署，验证 NAS 重启后容器自启、稿件仍在。
+- **P5**：横竖屏重测量、万字稿性能、误触防护等打磨。
+- **iPad**：有设备后按「实机测试状态」逐项验收。
 
 ## License
 
