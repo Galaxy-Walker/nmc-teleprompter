@@ -1,5 +1,6 @@
 import { saveSettings } from "./settings.js";
 import { createWakeLock } from "./wake.js";
+import { renderProgress } from "./progress.js";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -10,7 +11,9 @@ function isInteractive(target) {
   );
 }
 
-export async function createPlayer({ script, settings }) {
+// Return ownership immediately so routes can cancel an unfinished player.
+// `ready` settles after initialization or cancellation; destroy is idempotent.
+export function createPlayer({ script, settings }) {
   const byId = (id) => document.getElementById(id);
 
   const stage = byId("stage");
@@ -71,6 +74,12 @@ export async function createPlayer({ script, settings }) {
   let tops = [];
   let charsRead = 0;
   let ready = false;
+  let destroyed = false;
+  let initRaf = 0;
+  let cancelInitialization;
+  const initializationCancelled = new Promise((resolve) => {
+    cancelInitialization = resolve;
+  });
   let playing = false;
   let rafId = 0;
   let lastTs = 0;
@@ -219,11 +228,7 @@ export async function createPlayer({ script, settings }) {
   }
 
   function updateProgress() {
-    const ratio = total > 0 ? charsRead / total : 0;
-    const percent = Math.round(ratio * 100);
-    hudProgress.textContent = `${percent}%`;
-    progressInput.value = String(Math.round(ratio * 1000));
-    progressValue.textContent = `${percent}% · ${Math.round(charsRead)}/${total}`;
+    renderProgress(hudProgress, progressInput, progressValue, charsRead, total);
   }
 
   function syncSettingsButton() {
@@ -267,7 +272,7 @@ export async function createPlayer({ script, settings }) {
 
   function startWake() {
     wake.start().then((ok) => {
-      wakeNote.hidden = ok;
+      if (!destroyed) wakeNote.hidden = ok;
     });
   }
 
@@ -697,6 +702,11 @@ export async function createPlayer({ script, settings }) {
   });
 
   function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    ready = false;
+    cancelInitialization();
+    cancelAnimationFrame(initRaf);
     for (const cleanup of cleanups) cleanup();
     cleanups.length = 0;
     pause();
@@ -709,15 +719,29 @@ export async function createPlayer({ script, settings }) {
     content.replaceChildren();
   }
 
-  applyVisuals();
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
+  async function initialize() {
+    try {
+      applyVisuals();
+      if (document.fonts?.ready) {
+        await Promise.race([document.fonts.ready, initializationCancelled]);
+      }
+      if (destroyed) return;
+      await Promise.race([
+        new Promise((resolve) => { initRaf = requestAnimationFrame(resolve); }),
+        initializationCancelled,
+      ]);
+      initRaf = 0;
+      if (destroyed) return;
+      measure();
+      setChars(0);
+      ready = true;
+      statusEl.hidden = true;
+    } catch (error) {
+      destroy();
+      throw error;
+    }
   }
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  measure();
-  setChars(0);
-  ready = true;
-  statusEl.hidden = true;
 
-  return { destroy };
+  return { destroy, ready: initialize() };
 }
+
