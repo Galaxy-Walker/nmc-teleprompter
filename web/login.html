@@ -166,23 +166,6 @@
       cursor: wait;
     }
 
-    .foot {
-      margin: 22px 0 0;
-      padding-top: 18px;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.7;
-    }
-
-    .foot code {
-      padding: 1px 5px;
-      border-radius: 5px;
-      background: rgb(255 255 255 / 7%);
-      color: var(--fg);
-      font-size: 11px;
-    }
-
     @media (max-width: 480px) {
       .login-card {
         padding: 24px 20px;
@@ -196,7 +179,7 @@
     <div class="badge" aria-hidden="true">🔒</div>
     <p class="eyebrow">TELEPROMPTER</p>
     <h1>请输入访问密码</h1>
-    <p class="sub">提词器只对知道密码的人开放。登录一次，这台设备 30 天内免密码。</p>
+    <p class="sub">登录一次，这台设备 30 天内免密码。</p>
 
     <form id="login-form" novalidate>
       <label for="password">访问密码</label>
@@ -208,11 +191,6 @@
       <p id="error" class="error" role="alert" hidden></p>
       <button id="submit" class="primary" type="submit">进入提词器</button>
     </form>
-
-    <p class="foot">
-      密码由部署时的 <code>TELEPROMPTER_PASSWORD</code> 决定；<br>
-      首次启动的初始密码见容器日志，或数据目录里的 <code>.access-password</code>。
-    </p>
   </main>
 
   <script>
