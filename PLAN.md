@@ -486,7 +486,7 @@ DELETE /api/scripts/{id}     → 204
 | **P4** | compose（路径 A）→ 绿联 Docker「项目」部署，写 README | 先用 hello-world 验证项目页；再部署正式服务；NAS 重启后容器自启，稿件还在 |
 | **P5** | 打磨：设置面板收纳、误触防护、横竖屏切换重测量、万字稿性能 | 只在实测有问题时做；不做提前优化 |
 
-> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），Android 实机复测通过，**iPad 实机未测**；P4 的 compose / Dockerfile / start.sh 已实现，并完成本机启动冒烟（首次装依赖、二次跳过、`/api/health` 正常），**待绿联 NAS 实机部署**。
+> 当前进度（2026-10-21）：P0 平板连通性通过；P1 滚动/暂停/镜像/触控/改字号通过；P2 上传/粘贴/重命名/删除通过（**31 个后端测试 + 无头 UI 全流程**）；P3 防息屏已按 NoSleep 方案改为带静音音轨的 WebM/MP4（**不 muted**），Android 实机复测通过，**iPad 实机未测**；P4 的 compose / Dockerfile / start.sh 已实现并完成本机启动冒烟；**2026-10-21 已在绿联 UGOS Pro 的 Docker「项目」中实机部署并正常使用**，NAS 重启后的自启/`data/` 持久化待验收。
 
 ---
 
@@ -621,6 +621,8 @@ exec "$BIN_DIR/uvicorn" app.main:app \
 - 依赖升级：改 `pyproject.toml` → `uv lock` → `uv export ...` → 覆盖 `requirements.txt` → 重新部署；哈希变化会自动重装。
 
 ### 11.4 操作步骤（路径 A，全程点鼠标）
+
+> 2026-10-21 已按此路径在 UGOS Pro 上部署成功；以下保留为重装/迁移步骤。
 
 0. **先做连通性预检**：在 Docker「项目」里跑一个 hello-world 或 nginx，确认项目页能创建、相对路径能挂载、端口能映射、日志能看。再部署正式服务，避免把 UGOS 问题误判成应用问题。
 1. 绿联文件管理器：在 `docker` 共享文件夹下新建目录 `teleprompter`，把项目的 `app/`、`web/`、`samples/`、`docker/`、`requirements.txt`、`docker-compose.yml` 传进去；顺手建一个空的 `data/` 目录。若走路径 B/C，再把 `Dockerfile`、`.dockerignore` 一起传上去。
