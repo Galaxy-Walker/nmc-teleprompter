@@ -215,6 +215,15 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 `pytest` 会在 `tests/conftest.py` 里把密码固定成 `test-pass`，不影响本机环境。
 
+播放器测试可用 Node.js 18+ 运行（仅测试需要，部署仍无需 Node）：
+
+```sh
+node --test tests/test_progress.mjs tests/test_player_lifecycle.cjs
+```
+
+测试覆盖快进、回退、结束、重播，以及 60/120 Hz 下的显示一致性和 DOM 写入次数。
+生命周期测试通过模拟 DOM、字体加载和动画帧验证切稿、取消初始化、重复销毁及异常清理；不替代浏览器或平板实机验收。
+
 修改依赖后重新生成部署用固定版本：
 
 ```powershell
@@ -246,3 +255,4 @@ PLAN.md         技术方案与已知坑
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
+
