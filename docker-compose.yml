@@ -1,0 +1,32 @@
+services:
+  teleprompter:
+    image: python:3.12-slim-bookworm
+    working_dir: /app
+    ports:
+      - "8300:8000"
+    volumes:
+      - ./app:/app/app:ro
+      - ./web:/app/web:ro
+      - ./samples:/app/samples:ro
+      - ./docker/start.sh:/app/start.sh:ro
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./data:/data
+      - ./venv:/app/.venv
+    environment:
+      TZ: Asia/Shanghai
+      PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+      DATA_DIR: /data
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    command: ["bash", "/app/start.sh"]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s

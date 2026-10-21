@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gitattributes
+.venv
+venv
+data
+tests
+.tmp
+.pytest_cache
+__pycache__
+*.py[cod]
+*.log
+PLAN.md
+README.md

@@ -2,3 +2,8 @@
 
 # 容器里用 bash 执行，必须是 LF；否则会报 $'\r': command not found
 *.sh text eol=lf
+
+# 构建/编排文件也统一 LF，避免 Windows 编辑器引入 CRLF
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore text eol=lf
