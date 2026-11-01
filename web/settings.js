@@ -2,10 +2,9 @@ const STORAGE_KEY = "teleprompter.settings.v1";
 
 export const DEFAULT_SETTINGS = Object.freeze({
   wpm: 220,
-  fontSize: 48,
+  fontSize: 56,
   lineHeight: 1.6,
   theme: "dark",
-  flipX: false,
   flipY: false,
 });
 
@@ -13,6 +12,8 @@ export function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
+    // 旧版本支持过左右镜像，该功能已移除；顺手清掉历史存档里的字段。
+    if (parsed && typeof parsed === "object") delete parsed.flipX;
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return { ...DEFAULT_SETTINGS };

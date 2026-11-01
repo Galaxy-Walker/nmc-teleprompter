@@ -11,7 +11,7 @@
   --accent-contrast: #111111;
   --focus: rgba(251, 191, 36, 0.6);
   --focus-glow: rgba(251, 191, 36, 0.35);
-  --font-size: 48px;
+  --font-size: 56px;
   --line-height: 1.6;
   --focus-offset: 24px;
   --danger: #f87171;
@@ -81,10 +81,6 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-}
-
-.stage.flip-x {
-  transform: scaleX(-1);
 }
 
 .stage.flip-y {
@@ -459,12 +455,44 @@ body {
   font-size: 14px;
 }
 
+.row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row-label,
 .row > span {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px;
   line-height: 1.4;
+}
+
+.row-reset {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row-reset:hover,
+.row-reset:focus-visible {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.row-reset:active {
+  transform: scale(0.96);
 }
 
 output {

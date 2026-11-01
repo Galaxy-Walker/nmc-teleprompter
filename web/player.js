@@ -1,4 +1,4 @@
-import { saveSettings } from "./settings.js";
+import { DEFAULT_SETTINGS, saveSettings } from "./settings.js";
 import { createWakeLock } from "./wake.js";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -31,13 +31,15 @@ export async function createPlayer({ script, settings }) {
   const hudSpeed = byId("hud-speed");
   const wpmInput = byId("wpm");
   const wpmValue = byId("wpm-value");
+  const wpmResetBtn = byId("wpm-reset");
   const fontInput = byId("font");
   const fontValue = byId("font-value");
+  const fontResetBtn = byId("font-reset");
   const lineInput = byId("line");
   const lineValue = byId("line-value");
+  const lineResetBtn = byId("line-reset");
   const progressInput = byId("progress");
   const progressValue = byId("progress-value");
-  const flipXBtn = byId("flip-x");
   const flipYBtn = byId("flip-y");
   const fullscreenBtn = byId("fullscreen-btn");
   const restartBtn = byId("restart-btn");
@@ -85,13 +87,24 @@ export async function createPlayer({ script, settings }) {
   let twoFinger = false;
   let lastTouchAt = 0;
 
-  let wpm = clamp(Number(settings.wpm) || 220, 60, 600);
-  let fontSize = clamp(Number(settings.fontSize) || 48, 32, 96);
-  let lineHeight = clamp(Number(settings.lineHeight) || 1.6, 1.3, 2.0);
+  let wpm = clamp(
+    Number(settings.wpm) || DEFAULT_SETTINGS.wpm,
+    60,
+    600
+  );
+  let fontSize = clamp(
+    Number(settings.fontSize) || DEFAULT_SETTINGS.fontSize,
+    32,
+    96
+  );
+  let lineHeight = clamp(
+    Number(settings.lineHeight) || DEFAULT_SETTINGS.lineHeight,
+    1.3,
+    2.0
+  );
   let theme = ["dark", "light", "amber"].includes(settings.theme)
     ? settings.theme
     : "dark";
-  let flipX = Boolean(settings.flipX);
   let flipY = Boolean(settings.flipY);
   let lineBox = fontSize * lineHeight;
   let maxY = 0;
@@ -129,7 +142,6 @@ export async function createPlayer({ script, settings }) {
       `${lineBox / 2}px`
     );
 
-    stage.classList.toggle("flip-x", flipX);
     stage.classList.toggle("flip-y", flipY);
 
     wpmInput.value = String(wpm);
@@ -139,7 +151,6 @@ export async function createPlayer({ script, settings }) {
     fontValue.textContent = String(fontSize);
     lineInput.value = String(lineHeight);
     lineValue.textContent = lineHeight.toFixed(1);
-    flipXBtn.classList.toggle("active", flipX);
     flipYBtn.classList.toggle("active", flipY);
 
     for (const button of themeButtons) {
@@ -153,7 +164,6 @@ export async function createPlayer({ script, settings }) {
       fontSize,
       lineHeight,
       theme,
-      flipX,
       flipY,
     });
     saveSettings(settings);
@@ -334,12 +344,38 @@ export async function createPlayer({ script, settings }) {
     syncSettingsButton();
   }
 
-  function changeWpm(delta) {
-    wpm = clamp(wpm + delta, 60, 600);
+  function setWpm(value) {
+    wpm = clamp(Number(value) || DEFAULT_SETTINGS.wpm, 60, 600);
     wpmInput.value = String(wpm);
     wpmValue.textContent = String(wpm);
     updateHudSpeed();
     persist();
+  }
+
+  function changeWpm(delta) {
+    setWpm(wpm + delta);
+  }
+
+  function setFontSize(value) {
+    fontSize = clamp(
+      Number(value) || DEFAULT_SETTINGS.fontSize,
+      32,
+      96
+    );
+    applyVisuals();
+    persist();
+    remeasureSoon();
+  }
+
+  function setLineHeight(value) {
+    lineHeight = clamp(
+      Number(value) || DEFAULT_SETTINGS.lineHeight,
+      1.3,
+      2.0
+    );
+    applyVisuals();
+    persist();
+    remeasureSoon();
   }
 
   function openControls() {
@@ -369,9 +405,8 @@ export async function createPlayer({ script, settings }) {
 
   function logicalPoint(touch) {
     const rect = stage.getBoundingClientRect();
-    let x = touch.clientX - rect.left;
+    const x = touch.clientX - rect.left;
     let y = touch.clientY - rect.top;
-    if (flipX) x = rect.width - x;
     if (flipY) y = rect.height - y;
     return { x, y, width: rect.width, height: rect.height };
   }
@@ -502,26 +537,14 @@ export async function createPlayer({ script, settings }) {
     begin();
   });
 
-  on(wpmInput, "input", () => {
-    wpm = clamp(Number(wpmInput.value) || 220, 60, 600);
-    wpmValue.textContent = String(wpm);
-    updateHudSpeed();
-    persist();
-  });
+  on(wpmInput, "input", () => setWpm(wpmInput.value));
+  on(wpmResetBtn, "click", () => setWpm(DEFAULT_SETTINGS.wpm));
 
-  on(fontInput, "input", () => {
-    fontSize = clamp(Number(fontInput.value) || 48, 32, 96);
-    applyVisuals();
-    persist();
-    remeasureSoon();
-  });
+  on(fontInput, "input", () => setFontSize(fontInput.value));
+  on(fontResetBtn, "click", () => setFontSize(DEFAULT_SETTINGS.fontSize));
 
-  on(lineInput, "input", () => {
-    lineHeight = clamp(Number(lineInput.value) || 1.6, 1.3, 2.0);
-    applyVisuals();
-    persist();
-    remeasureSoon();
-  });
+  on(lineInput, "input", () => setLineHeight(lineInput.value));
+  on(lineResetBtn, "click", () => setLineHeight(DEFAULT_SETTINGS.lineHeight));
 
   for (const button of themeButtons) {
     on(button, "click", () => {
@@ -531,13 +554,6 @@ export async function createPlayer({ script, settings }) {
       persist();
     });
   }
-
-  on(flipXBtn, "click", () => {
-    flipX = !flipX;
-    stage.classList.toggle("flip-x", flipX);
-    flipXBtn.classList.toggle("active", flipX);
-    persist();
-  });
 
   on(flipYBtn, "click", () => {
     flipY = !flipY;
@@ -674,7 +690,7 @@ export async function createPlayer({ script, settings }) {
         fullscreenBtn.click();
         break;
       case "KeyM":
-        flipXBtn.click();
+        flipYBtn.click();
         break;
       default:
         break;
