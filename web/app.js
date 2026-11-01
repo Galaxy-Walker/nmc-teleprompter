@@ -64,14 +64,13 @@ async function showPlayer(id) {
     const script = await getScript(id);
     if (token !== routeToken) return;
 
-    const created = await createPlayer({ script, settings });
-    if (token !== routeToken) {
-      created.destroy();
-      return;
-    }
+    const created = createPlayer({ script, settings });
     player = created;
+    await created.ready;
+    if (token !== routeToken) return;
   } catch (error) {
     if (token !== routeToken) return;
+    destroyPlayer();
     statusEl.textContent = `加载失败：${error.message}`;
     window.setTimeout(() => {
       if (token === routeToken) location.hash = "#/";
@@ -87,3 +86,4 @@ function render() {
 
 window.addEventListener("hashchange", render);
 render();
+
