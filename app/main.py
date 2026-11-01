@@ -52,7 +52,7 @@ if not ACCESS.generated:
 # endpoint are public by definition.
 PUBLIC_PATHS = {"/api/health", "/api/login", "/login"}
 
-app = FastAPI(title="Teleprompter", version="0.1.1")
+app = FastAPI(title="Teleprompter", version="0.1.2")
 
 
 class ScriptPatch(BaseModel):
