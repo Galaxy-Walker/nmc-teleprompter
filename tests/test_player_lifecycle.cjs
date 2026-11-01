@@ -64,6 +64,7 @@ function harness({ fonts = Promise.resolve() } = {}) {
     cancelAnimationFrame(id) { frames.delete(id); },
     clearTimeout(id) { timers.delete(id); }, clearInterval(id) { timers.delete(id); },
     saveSettings() {}, applySettings() {}, loadSettings: () => ({}),
+    DEFAULT_SETTINGS: { wpm: 220, fontSize: 56, lineHeight: 1.6 },
     initGuide() {}, initLibrary() {}, refreshLibrary: async () => {},
     getScript: async id => ({ title: id, paragraphs: [{ text: id, units: 10 }] }),
     createWakeLock() {
@@ -76,7 +77,7 @@ function harness({ fonts = Promise.resolve() } = {}) {
   });
   for (const file of ['progress.js', 'player.js', 'app.js']) {
     const source = fs.readFileSync(path.join(__dirname, '../web', file), 'utf8')
-      .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+      .replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
     vm.runInContext(source, context, { filename: file });
   }
   const listeners = () => targets.reduce((sum, target) => sum +
